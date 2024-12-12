@@ -1,0 +1,84 @@
+<?php
+class RestaurantDatabase {
+    private $host = "127.0.0.1";
+    private $port = "3306";
+    private $database = "restaurant_reservations";
+    private $user = "root";
+    private $password = "";
+    private $connection;
+
+    public function __construct() {
+        $this->connect();
+    }
+
+    private function connect() {
+        $this->connection = new mysqli($this->host, $this->user, $this->password, $this->database, $this->port);
+        if ($this->connection->connect_error) {
+            die("Connection failed: " . $this->connection->connect_error);
+        }
+        echo "Successfully connected to the database";
+    }
+
+    public function addReservation($customerId, $reservationTime, $numberOfGuests, $specialRequests) {
+        $stmt = $this->connection->prepare(
+            "INSERT INTO reservations (customerId, reservationTime, numberOfGuests, specialRequests) VALUES (?, ?, ?, ?)"
+        );
+        $stmt->bind_param("isis", $customerId, $reservationTime, $numberOfGuests, $specialRequests);
+        $stmt->execute();
+        $stmt->close();
+        echo "Reservation added successfully";
+    }
+
+    public function getAllReservations() {
+        $result = $this->connection->query("SELECT * FROM reservations");
+        return $result->fetch_all(MYSQLI_ASSOC);
+    }
+
+    public function addCustomer($customerName, $contactInfo) {
+        // Check if customer already exists
+        $checkStmt = $this->connection->prepare("SELECT customerId FROM customers WHERE customerName = ? AND contactInfo = ?");
+        $checkStmt->bind_param("ss", $customerName, $contactInfo);
+        $checkStmt->execute();
+        $checkResult = $checkStmt->get_result();
+        
+        // If customer doesn't exist, insert new customer
+        if ($checkResult->num_rows == 0) {
+            $insertStmt = $this->connection->prepare("INSERT INTO customers (customerName, contactInfo) VALUES (?, ?)");
+            $insertStmt->bind_param("ss", $customerName, $contactInfo);
+            $insertStmt->execute();
+            
+            // Return the new customer ID
+            $newCustomerId = $this->connection->insert_id;
+            $insertStmt->close();
+            
+            echo "New customer added successfully";
+            return $newCustomerId;
+        } 
+        $existingCustomer = $checkResult->fetch_assoc();
+        echo "Customer already exists";
+        $customerId = $existingCustomer['customerId'];
+        $checkStmt->close();
+        return $customerId;
+        
+    
+    }
+
+    public function getCustomerPreferences($customerId) {
+        // Retrieve dining preferences for a specific customer
+        $stmt = $this->connection->prepare("SELECT * FROM DiningPreferences WHERE customerId = ?");
+        $stmt->bind_param("i", $customerId);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        
+        // Return preferences as an associative array
+        return $result->fetch_all(MYSQLI_ASSOC);
+    }
+
+    // Destructor to close the database connection
+    public function __destruct() {
+        if ($this->connection) {
+            $this->connection->close();
+        }
+    }
+}
+?>
